@@ -1,0 +1,334 @@
+{
+  "name": "dynamic_search_elasticsearch_cloud",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "169f8e1c-e4a8-4229-9b2a-9db33003f221",
+        "formTitle": "🔍 Bank Fraud Detection Search",
+        "formDescription": "Search for suspicious transactions in your banking database",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Minimum Amount ($)",
+              "fieldType": "number"
+            },
+            {
+              "fieldLabel": "Date Range",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "2023-04-01 to 2023-06-30 (Q2 2023)"
+                  },
+                  {
+                    "option": "2023-07-01 to 2023-09-30 (Q3 2023)"
+                  },
+                  {
+                    "option": "2023-10-01 to 2023-12-31 (Q4 2023)"
+                  },
+                  {
+                    "option": "2023-04-01 to 2023-12-31 (Full Range)"
+                  },
+                  {
+                    "option": "Custom Range"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Start Date (if Custom Range)",
+              "fieldType": "date"
+            },
+            {
+              "fieldLabel": "End Date (if Custom Range)",
+              "fieldType": "date"
+            },
+            {
+              "fieldLabel": "Account ID (Optional)"
+            },
+            {
+              "fieldLabel": "Transaction Type",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "All Types"
+                  },
+                  {
+                    "option": "Debit"
+                  },
+                  {
+                    "option": "Credit"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Location Filter (Optional)"
+            },
+            {
+              "fieldLabel": "Report Format",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Text Report"
+                  },
+                  {
+                    "option": "CSV Export"
+                  }
+                ]
+              },
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "88756123-cb92-4371-99b5-b5bd767fbe15",
+      "name": "Fraud Search Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.1,
+      "position": [
+        -400,
+        192
+      ],
+      "webhookId": "169f8e1c-e4a8-4229-9b2a-9db33003f221"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process form input and build Elasticsearch query for bank transactions\nconst formData = $input.first().json;\n\n// Extract form values\nconst minAmount = formData['Minimum Amount ($)'] || 500;\nconst dateRange = formData['Date Range'] || '2023-04-01 to 2023-12-31 (Full Range)';\nconst customStartDate = formData['Start Date (if Custom Range)'];\nconst customEndDate = formData['End Date (if Custom Range)'];\nconst accountId = formData['Account ID (Optional)']?.trim() || null;\nconst transactionType = formData['Transaction Type'] || 'All Types';\nconst location = formData['Location Filter (Optional)']?.trim() || null;\nconst reportFormat = formData['Report Format'] || 'Text Report';\n\n// Convert date range to start and end dates\nlet startDate, endDate;\n\nif (dateRange === 'Custom Range' && customStartDate && customEndDate) {\n  startDate = customStartDate + ' 00:00:00';\n  endDate = customEndDate + ' 23:59:59';\n} else {\n  // Parse predefined ranges\n  switch(dateRange) {\n    case '2023-04-01 to 2023-06-30 (Q2 2023)':\n      startDate = '2023-04-01 00:00:00';\n      endDate = '2023-06-30 23:59:59';\n      break;\n    case '2023-07-01 to 2023-09-30 (Q3 2023)':\n      startDate = '2023-07-01 00:00:00';\n      endDate = '2023-09-30 23:59:59';\n      break;\n    case '2023-10-01 to 2023-12-31 (Q4 2023)':\n      startDate = '2023-10-01 00:00:00';\n      endDate = '2023-12-31 23:59:59';\n      break;\n    default: // Full Range\n      startDate = '2023-04-01 00:00:00';\n      endDate = '2023-12-31 23:59:59';\n  }\n}\n\n// Build Elasticsearch query\nconst mustConditions = [\n  {\n    \"range\": {\n      \"TransactionDate.keyword\": {\n        \"gte\": startDate,\n        \"lte\": endDate\n      }\n    }\n  },\n  {\n    \"range\": {\n      \"TransactionAmount\": {\n        \"gte\": minAmount\n      }\n    }\n  }\n];\n\n// Add account filter if provided\nif (accountId) {\n  mustConditions.push({\n    \"term\": {\n      \"AccountID.keyword\": accountId\n    }\n  });\n}\n\n// Add transaction type filter if not \"All Types\"\nif (transactionType !== 'All Types') {\n  mustConditions.push({\n    \"term\": {\n      \"TransactionType.keyword\": transactionType\n    }\n  });\n}\n\n// Add location filter if provided\nif (location) {\n  mustConditions.push({\n    \"term\": {\n      \"Location.keyword\": location\n    }\n  });\n}\n\nconst esQuery = {\n  \"query\": {\n    \"bool\": {\n      \"must\": mustConditions\n    }\n  },\n  \"sort\": [{ \"TransactionDate.keyword\": { \"order\": \"desc\" } }],\n  \"size\": 100\n};\n\nreturn {\n  elasticsearchQuery: esQuery,\n  searchParams: {\n    minAmount,\n    dateRange,\n    startDate,\n    endDate,\n    accountId,\n    transactionType,\n    location,\n    reportFormat\n  }\n};"
+      },
+      "id": "09236b60-0599-449e-8bff-9013b26e3840",
+      "name": "Build Search Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://106e9cb6ea38.ngrok-free.app/bank_transactions/_search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.elasticsearchQuery }}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "936a8599-7599-4ac9-af05-0f2fc88d08ac",
+      "name": "Search Elasticsearch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        48,
+        192
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "AtU0Jo4Z05hie629",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get data from previous nodes\nconst esResponse = $input.first().json;\nconst searchParams = $('Build Search Query').first().json.searchParams;\n\n// Extract results\nconst hits = esResponse.hits?.hits || [];\nconst totalFound = esResponse.hits?.total?.value || 0;\n\n// Generate filename\nconst timestamp = new Date().toISOString().split('T')[0];\nconst isCSV = searchParams.reportFormat === 'CSV Export';\nconst filename = `bank_fraud_report_${timestamp}.${isCSV ? 'csv' : 'txt'}`;\nconst mimeType = isCSV ? 'text/csv' : 'text/plain';\n\n// Generate report content\nlet reportContent = '';\n\nif (isCSV) {\n  // CSV format with all relevant fields\n  reportContent = 'TransactionID,AccountID,TransactionAmount,TransactionDate,TransactionType,Location,DeviceID,IP_Address,MerchantID,Channel,CustomerAge,CustomerOccupation,TransactionDuration,LoginAttempts,AccountBalance\\n';\n  hits.forEach(hit => {\n    const t = hit._source || {};\n    reportContent += `\"${t.TransactionID || ''}\",\"${t.AccountID || ''}\",${t.TransactionAmount || 0},\"${t.TransactionDate || ''}\",\"${t.TransactionType || ''}\",\"${t.Location || ''}\",\"${t.DeviceID || ''}\",\"${t['IP Address'] || ''}\",\"${t.MerchantID || ''}\",\"${t.Channel || ''}\",${t.CustomerAge || ''},\"${t.CustomerOccupation || ''}\",${t.TransactionDuration || ''},${t.LoginAttempts || ''},${t.AccountBalance || ''}\\n`;\n  });\n} else {\n  // Text format\n  reportContent = `BANK FRAUD DETECTION REPORT\\n`;\n  reportContent += `==============================\\n\\n`;\n  reportContent += `Search Criteria:\\n`;\n  reportContent += `- Minimum Amount: $${searchParams.minAmount}\\n`;\n  reportContent += `- Date Range: ${searchParams.dateRange}\\n`;\n  reportContent += `- Period: ${searchParams.startDate} to ${searchParams.endDate}\\n`;\n  reportContent += `- Account ID: ${searchParams.accountId || 'All'}\\n`;\n  reportContent += `- Transaction Type: ${searchParams.transactionType}\\n`;\n  reportContent += `- Location: ${searchParams.location || 'All'}\\n\\n`;\n  reportContent += `Results: ${totalFound} suspicious transactions found\\n\\n`;\n  \n  if (hits.length > 0) {\n    reportContent += `SUSPICIOUS TRANSACTIONS:\\n`;\n    reportContent += `========================\\n\\n`;\n    hits.forEach((hit, index) => {\n      const t = hit._source || {};\n      reportContent += `${index + 1}. Transaction ID: ${t.TransactionID}\\n`;\n      reportContent += `   Account: ${t.AccountID}\\n`;\n      reportContent += `   Amount: $${t.TransactionAmount}\\n`;\n      reportContent += `   Date: ${t.TransactionDate}\\n`;\n      reportContent += `   Type: ${t.TransactionType}\\n`;\n      reportContent += `   Location: ${t.Location}\\n`;\n      reportContent += `   Channel: ${t.Channel}\\n`;\n      reportContent += `   Customer Age: ${t.CustomerAge}\\n`;\n      reportContent += `   Occupation: ${t.CustomerOccupation}\\n`;\n      reportContent += `   Device ID: ${t.DeviceID}\\n`;\n      reportContent += `   IP Address: ${t['IP Address']}\\n`;\n      reportContent += `   Merchant: ${t.MerchantID}\\n`;\n      reportContent += `   Duration: ${t.TransactionDuration}s\\n`;\n      reportContent += `   Login Attempts: ${t.LoginAttempts}\\n`;\n      reportContent += `   Account Balance: $${t.AccountBalance}\\n\\n`;\n    });\n  } else {\n    reportContent += `No suspicious transactions found matching your criteria.\\n`;\n  }\n  \n  // Add summary statistics\n  if (hits.length > 0) {\n    const amounts = hits.map(hit => hit._source?.TransactionAmount || 0);\n    const totalAmount = amounts.reduce((sum, amount) => sum + amount, 0);\n    const avgAmount = totalAmount / amounts.length;\n    const maxAmount = Math.max(...amounts);\n    const minAmount = Math.min(...amounts);\n    \n    reportContent += `SUMMARY STATISTICS:\\n`;\n    reportContent += `===================\\n`;\n    reportContent += `Total Amount: $${totalAmount.toFixed(2)}\\n`;\n    reportContent += `Average Amount: $${avgAmount.toFixed(2)}\\n`;\n    reportContent += `Highest Amount: $${maxAmount.toFixed(2)}\\n`;\n    reportContent += `Lowest Amount: $${minAmount.toFixed(2)}\\n`;\n  }\n}\n\n// Convert content to binary data\nconst binaryData = Buffer.from(reportContent, 'utf8');\n\nreturn [{\n  json: {\n    filename: filename,\n    mimeType: mimeType,\n    content: reportContent,\n    totalFound: totalFound\n  },\n  binary: {\n    data: {\n      data: Buffer.from(reportContent, 'utf8'),\n      mimeType: mimeType,\n      fileName: filename,\n      fileExtension: isCSV ? 'csv' : 'txt'\n    }\n  }\n}];"
+      },
+      "id": "ed632b43-58f3-4fb7-b9dd-e772dbea10e5",
+      "name": "Format Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🎯 ENTRY POINT\nUser fills out fraud detection form with:\n- Minimum transaction amount\n- Time range (different quarters in 2023)\n- Optional customer ID filter\n- Output format (Text/CSV)\n\n💡 TIP: Form auto-validates required fields!",
+        "height": 220,
+        "width": 360
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -848,
+        160
+      ],
+      "typeVersion": 1,
+      "id": "172d7397-5b67-45fc-8ca5-f571611a79c0",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## 🔧 QUERY BUILDER\nTransforms user input into Elasticsearch query:\n\n✅ Builds filters:\n   • Amount >= minimum\n   • Timestamp within range\n   • Customer ID (if provided)\n\n📊 Output: Ready-to-use ES query + metadata",
+        "height": 220,
+        "width": 360,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -848,
+        416
+      ],
+      "typeVersion": 1,
+      "id": "57b7ad7a-211d-4337-b891-9d8c4f89aa94",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## 🎯 DATA HUNTER\nSearches bank_transactions index for suspicious activity\n\n🔧 Configuration:\n   • POST to elasticsearch\n   • Uses HTTP Basic Auth\n   • Sends JSON query from previous node\n   • Returns max 100 results, newest first\n\n⚠️ Note: Requires valid ES credentials!",
+        "height": 260,
+        "width": 320,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -448,
+        416
+      ],
+      "typeVersion": 1,
+      "id": "3cb90a71-06de-4d7a-a73b-a8056cd8f0f8",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## 📝 REPORT GENERATOR\nTransforms raw ES data into user-friendly reports\n\n🎨 Creates two formats:\n   📄 TEXT: Human-readable fraud summary\n   📊 CSV: Spreadsheet-ready data export\n\n✨ Features:\n   • Auto-generates timestamped filename\n   • Converts text to binary for file writing\n   • Includes search criteria summary\n   • Lists all suspicious transactions\n\n🔄 Output: Content + Binary data ready for file save",
+        "height": 340,
+        "width": 340,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -80,
+        416
+      ],
+      "typeVersion": 1,
+      "id": "32c80759-7e16-4b1c-bfcf-13c8a2901a3d",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## 📁 FILE SAVER\nWrites the fraud report to server disk\n\n🔧 Uses binary data from Format Report node\n✅ File ready for download or further processing\n\n🎯 Perfect for:\n   • Audit trails\n   • Batch processing\n   • Compliance reporting",
+        "height": 228,
+        "width": 400,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        304,
+        416
+      ],
+      "typeVersion": 1,
+      "id": "4ced82fd-e63b-4df4-8b02-365752602246",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## 🎯 FRAUD DETECTION PIPELINE\n\nUser Form → Query Builder → ES Search → Report Format → File Save\n\n⏱️ Typical execution: 2-5 seconds\n📊 Handles up to 100 suspicious transactions\n🔒 Secure: Uses authenticated ES connection\n📁 Output: Timestamped report files",
+        "height": 200,
+        "width": 720,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -848,
+        -112
+      ],
+      "typeVersion": 1,
+      "id": "85867c41-b2e5-45e9-86f1-829022679121",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "={{ $json.mimeType }}"
+              },
+              {
+                "name": "Content-Disposition",
+                "value": "=attachment; filename=\"{{ $json.filename }}\""
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        448,
+        192
+      ],
+      "id": "225b89a8-19a7-4db2-993d-d961d9e53d0a",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Fraud Search Form": {
+      "main": [
+        [
+          {
+            "node": "Build Search Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search Query": {
+      "main": [
+        [
+          {
+            "node": "Search Elasticsearch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Elasticsearch": {
+      "main": [
+        [
+          {
+            "node": "Format Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Report": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4f2a9042-fc49-441e-935e-306735c45611",
+  "meta": {
+    "instanceId": "518f57ade2435937f90148d9ce87a0a624585c9338e9d783c210084b0f871ef9"
+  },
+  "id": "Q6MpWLGuYWFx3Qce",
+  "tags": []
+}
